@@ -34,6 +34,8 @@ int setup(void);
 void cleanup(void);
 
 // External
+extern void turn_on_acq(void);
+
 extern int write_vaddr_tcp(void *, size_t);
 extern int setup_tcp(void);
 extern void cleanup_tcp(void);
@@ -133,8 +135,12 @@ static int init() {
         return err;
     }
 
+
     if(compute_digest == LIME_DIGEST_COMPUTE)
         compute_digest = ldigest_init();
+
+    /* start microvisor */
+    turn_on_acq();
 
     for (p = iomem_resource.child; p ; p = p->sibling) {
 
