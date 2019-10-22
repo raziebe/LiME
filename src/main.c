@@ -23,6 +23,7 @@
 
 
 #include "lime.h"
+#include <linux/hyplet.h>
 
 // This file
 static int write_lime_header(struct resource *);
@@ -138,9 +139,10 @@ static int init() {
     if(compute_digest == LIME_DIGEST_COMPUTE)
         compute_digest = ldigest_init();
 
-    /* start microvisor */
+    /* start microvisor and get lime pool refernce*/
     turn_on_acq();
-
+    struct LimePagePool* pool =  (hyplet_get_vm())->limePool;
+    
     for (p = iomem_resource.child; p ; p = p->sibling) {
 
         if (strcmp(p->name, LIME_RAMSTR))
