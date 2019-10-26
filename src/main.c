@@ -24,6 +24,7 @@
 
 #include "lime.h"
 #include <linux/hyplet.h>
+#include <linux/smp.h>
 
 // This file
 static int write_lime_header(struct resource *);
@@ -139,9 +140,13 @@ static int init() {
     if(compute_digest == LIME_DIGEST_COMPUTE)
         compute_digest = ldigest_init();
 
-    /* start microvisor and get lime pool refernce*/
+    /* Disable preemption */
+    int cpu = get_cpu();
+
+    /* start microvisor and get lime pool refernce*/    
     turn_on_acq();
     struct LimePagePool* pool =  (hyplet_get_vm())->limePool;
+    
     printk(KERN_DEBUG "&lime pool = %p", (void*)pool);
 
     for (p = iomem_resource.child; p ; p = p->sibling) {
@@ -149,6 +154,7 @@ static int init() {
         if (strcmp(p->name, LIME_RAMSTR))
             continue;
 
+        /* Transmiting the lime header */
         if (mode == LIME_MODE_LIME && (err = write_lime_header(p))) {
             DBG("Error writing header 0x%lx - 0x%lx", (long) p->start, (long) p->end);
            break;
@@ -157,10 +163,14 @@ static int init() {
            break;
         }
 
+        /* Transmiting the RAM range */
         write_range(p);
 
         p_last = p->end;
     }
+
+    /* Enable preemption */
+    put_cpu();
 
     DBG("Memory Dump Complete...");
 
@@ -233,7 +243,6 @@ static void write_range(struct resource * res) {
         start = ktime_get_real();
 #endif
         p = pfn_to_page((i) >> PAGE_SHIFT);
-
         is = min((size_t) PAGE_SIZE, (size_t) (res->end - i + 1));
 
         if (is < PAGE_SIZE) {
@@ -250,7 +259,8 @@ static void write_range(struct resource * res) {
                 memcpy(lv, v, is);
                 s = write_vaddr(lv, is);
                 kfree(lv);
-            } else {
+            } else { // Digest option is not relevant for our purposes
+                // compare
                 s = write_vaddr(v, is);
             }
 
