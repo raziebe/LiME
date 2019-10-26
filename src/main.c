@@ -142,7 +142,8 @@ static int init() {
     /* start microvisor and get lime pool refernce*/
     turn_on_acq();
     struct LimePagePool* pool =  (hyplet_get_vm())->limePool;
-    
+    printk(KERN_DEBUG "&lime pool = %p", (void*)pool);
+
     for (p = iomem_resource.child; p ; p = p->sibling) {
 
         if (strcmp(p->name, LIME_RAMSTR))

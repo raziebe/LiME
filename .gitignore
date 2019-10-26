@@ -12,3 +12,5 @@ modules.order
 *.cmd
 .tmp_versions/
 
+src/.vscode/c_cpp_properties.json
+src/.vscode/settings.json

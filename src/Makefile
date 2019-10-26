@@ -23,11 +23,14 @@
 obj-m := lime.o
 lime-objs := tcp.o disk.o main.o hash.o
 
-KVER ?= $(shell uname -r)
+KVER ?= 4.19.73-memacq
 
-KDIR ?= /lib/modules/$(KVER)/build
+KDIR ?= ../../../my_kernels/microvisor_lime_scratch_18.10.19
 
 PWD := $(shell pwd)
+
+ARCH = arm64
+CROSS_COMPILE = /opt/gcc-linaro-4.9-2015.05-x86_64_aarch64-linux-gnu/bin/aarch64-linux-gnu-
 
 .PHONY: modules modules_install clean distclean debug
 
