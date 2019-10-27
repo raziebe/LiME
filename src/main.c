@@ -63,6 +63,8 @@ int localhostonly = 0;
 char * digest = 0;
 int compute_digest = 0;
 
+struct LimePagePool* pool =  NULL;
+
 extern struct resource iomem_resource;
 
 module_param(path, charp, S_IRUGO);
@@ -140,14 +142,11 @@ static int init() {
     if(compute_digest == LIME_DIGEST_COMPUTE)
         compute_digest = ldigest_init();
 
-    /* Disable preemption */
-    int cpu = get_cpu();
-
-    /* start microvisor and get lime pool refernce*/    
+    /* start microvisor(and inderectly initialize the pool) and acquire the pool*/    
     turn_on_acq();
-    struct LimePagePool* pool =  (hyplet_get_vm())->limePool;
-    
-    printk(KERN_DEBUG "&lime pool = %p", (void*)pool);
+    pool = (hyplet_get_vm())->limePool;
+
+    printk(KERN_DEBUG "lime pool = %p", (void*)pool);
 
     for (p = iomem_resource.child; p ; p = p->sibling) {
 
@@ -163,14 +162,17 @@ static int init() {
            break;
         }
 
+        /* Disable preemption */ // TODO: bug check this
+        int cpu = get_cpu();
+
         /* Transmiting the RAM range */
         write_range(p);
 
+        /* Enable preemption */
+        put_cpu();
+
         p_last = p->end;
     }
-
-    /* Enable preemption */
-    put_cpu();
 
     DBG("Memory Dump Complete...");
 
@@ -260,8 +262,24 @@ static void write_range(struct resource * res) {
                 s = write_vaddr(lv, is);
                 kfree(lv);
             } else { // Digest option is not relevant for our purposes
-                // compare
-                s = write_vaddr(v, is);
+                // TODO: Acquire lock and TODO: maybe move the following to a function
+                // TODO: make sure microvisor waits for us to finish this operation without interruption(e.g atomic lock, etc..)
+                
+                // TODO: maybe make size atomic                    
+                // Clean unneccessary pages from the pool
+                while(pool->size != 0 && pool_peek_min(pool)->phy_addr < (resource_size_t) i) // TODO: make sure 'i' is actually physical addres
+                    pool_pop_min(pool);
+
+                // Check if the microvisor has this page already -> if it has it then surely the page is outdated (*v is newer than pool->minimum)
+                if(pool_peek_min(pool)->phy_addr == (resource_size_t) i)
+                {
+                    struct LimePageContext* min = pool_pop_min(pool);
+                    s = write_vaddr((void*) min->hyp_vaddr, is); // might not work
+                }
+                else
+                    s = write_vaddr(v, is);
+
+                // TODO: Release lock -> only after finishing using memory, to avoid corruption
             }
 
             kunmap(p);            
