@@ -273,8 +273,9 @@ static void write_range(struct resource * res) {
                 // Check if the microvisor has this page already -> if it has it then surely the page is outdated (*v is newer than pool->minimum)
                 if(pool_peek_min(pool)->phy_addr == (resource_size_t) i)
                 {
-                    struct LimePageContext* min = pool_pop_min(pool);
+                    struct LimePageContext* min = pool_peek_min(pool);
                     s = write_vaddr((void*) min->hyp_vaddr, is); // might not work
+                    pool_pop_min(pool);
                 }
                 else
                     s = write_vaddr(v, is);

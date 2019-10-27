@@ -35,7 +35,7 @@ CROSS_COMPILE = /opt/gcc-linaro-4.9-2015.05-x86_64_aarch64-linux-gnu/bin/aarch64
 .PHONY: modules modules_install clean distclean debug
 
 default:
-	$(MAKE) -C $(KDIR) M="$(PWD)" modules
+	$(MAKE) -C $(KDIR) M="$(PWD)" ARCH=$(ARCH) CROSS_COMPILE=$(CROSS_COMPILE) modules
 	strip --strip-unneeded lime.ko
 	mv lime.ko lime-$(KVER).ko
 
