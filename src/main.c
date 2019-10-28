@@ -164,10 +164,14 @@ static int init() {
 
         /* Disable preemption */ // TODO: bug check this
         int cpu = get_cpu();
-
+        /* spin locking */
+        spinlock_t lock;
+        spin_lock_init(&lock);
+        spin_lock(&lock);
         /* Transmiting the RAM range */
         write_range(p);
-
+        /* releasing the spin lock */
+        spin_unlock(&lock);
         /* Enable preemption */
         put_cpu();
 
