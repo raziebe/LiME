@@ -164,6 +164,7 @@ static int init() {
 
         /* Disable preemption */ // TODO: bug check this
         //int cpu = get_cpu();
+	printk("Erez Lime\n");
         
         /* Transmiting the RAM range */
         write_range(p);
