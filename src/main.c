@@ -163,13 +163,13 @@ static int init() {
         }
 
         /* Disable preemption */ // TODO: bug check this
-        int cpu = get_cpu();
+        //int cpu = get_cpu();
         
         /* Transmiting the RAM range */
         write_range(p);
 
         /* Enable preemption */
-        put_cpu();
+        // put_cpu();
 
         p_last = p->end;
     }
@@ -263,6 +263,7 @@ static void write_range(struct resource * res) {
                 kfree(lv);
             } else { // Digest option is not relevant for our purposes
                 spin_lock(&pool->lock);       
+
                 // Clean unneccessary pages from the pool
                 while(pool->size != 0 && pool_peek_min(pool)->phy_addr < (resource_size_t) i) // TODO: make sure 'i' is actually physical addres
                     pool_pop_min(pool);
