@@ -262,10 +262,7 @@ static void write_range(struct resource * res) {
                 s = write_vaddr(lv, is);
                 kfree(lv);
             } else { // Digest option is not relevant for our purposes
-                // TODO: Acquire lock and TODO: maybe move the following to a function
-                // TODO: make sure microvisor waits for us to finish this operation without interruption(e.g atomic lock, etc..)
-                
-                // TODO: maybe make size atomic                    
+                spin_lock(&pool->lock);       
                 // Clean unneccessary pages from the pool
                 while(pool->size != 0 && pool_peek_min(pool)->phy_addr < (resource_size_t) i) // TODO: make sure 'i' is actually physical addres
                     pool_pop_min(pool);
@@ -280,7 +277,7 @@ static void write_range(struct resource * res) {
                 else
                     s = write_vaddr(v, is);
 
-                // TODO: Release lock -> only after finishing using memory, to avoid corruption
+                spin_unlock(&pool->lock);
             }
 
             kunmap(p);            
