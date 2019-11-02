@@ -263,7 +263,7 @@ static void write_range(struct resource * res) {
                 s = write_vaddr(lv, is);
                 kfree(lv);
             } else { // Digest option is not relevant for our purposes
-                spin_lock(&pool->lock);       
+                hyp_spin_lock(&pool->lock);       
 
                 // Clean unneccessary pages from the pool
                 while(pool->size != 0 && pool_peek_min(pool)->phy_addr < (resource_size_t) i) // TODO: make sure 'i' is actually physical addres
@@ -279,7 +279,7 @@ static void write_range(struct resource * res) {
                 else
                     s = write_vaddr(v, is);
 
-                spin_unlock(&pool->lock);
+                hyp_spin_unlock(&pool->lock);
             }
 
             kunmap(p);            
