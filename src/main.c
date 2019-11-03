@@ -263,23 +263,28 @@ static void write_range(struct resource * res) {
                 s = write_vaddr(lv, is);
                 kfree(lv);
             } else { // Digest option is not relevant for our purposes
-                hyp_spin_lock(&pool->lock);       
+                //hyp_spin_lock(&pool->lock);       
 
+                //printk(KERN_EMERG "Cleaning pool of size %d\n", pool->size);
                 // Clean unneccessary pages from the pool
                 while(pool->size != 0 && pool_peek_min(pool)->phy_addr < (resource_size_t) i) // TODO: make sure 'i' is actually physical addres
                     pool_pop_min(pool);
-
+                
+                //printk(KERN_EMERG "Comparing pool->phy_addr = %p WITH i = %p\n", (void*) pool_peek_min(pool)->phy_addr, (void*)i);
+                
                 // Check if the microvisor has this page already -> if it has it then surely the page is outdated (*v is newer than pool->minimum)
                 if(pool_peek_min(pool)->phy_addr == (resource_size_t) i)
                 {
                     struct LimePageContext* min = pool_peek_min(pool);
+                    //rintk(KERN_EMERG "writing page FROM pool, phy_addr = %p\n", (void*) min->phy_addr);
+
                     s = write_vaddr((void*) min->hyp_vaddr, is); // might not work
                     pool_pop_min(pool);
                 }
                 else
                     s = write_vaddr(v, is);
 
-                hyp_spin_unlock(&pool->lock);
+                //hyp_spin_unlock(&pool->lock);
             }
 
             kunmap(p);            
