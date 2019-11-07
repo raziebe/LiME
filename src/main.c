@@ -25,6 +25,7 @@
 #include "lime.h"
 #include <linux/hyplet.h>
 #include <linux/smp.h>
+#include <linux/delay.h>
 
 // This file
 static int write_lime_header(struct resource *);
@@ -242,6 +243,8 @@ static void write_range(struct resource * res) {
     DBG("Writing range %llx - %llx.", res->start, res->end);
 
     for (i = res->start; i <= res->end; i += is) {
+        msleep(10); // TODO: measure cpu performance boost and times
+        
 #ifdef LIME_SUPPORTS_TIMING
         start = ktime_get_real();
 #endif
@@ -258,16 +261,18 @@ static void write_range(struct resource * res) {
             //If we don't need to compute the digest; lets save some memory 
             //and cycles
             if(compute_digest == LIME_DIGEST_COMPUTE) {
+                /* Digest option is NOT relevant for mem_acq purposes */
                 void * lv = kmalloc(is, GFP_ATOMIC);
                 memcpy(lv, v, is);
                 s = write_vaddr(lv, is);
                 kfree(lv);
-            } else { // Digest option is not relevant for our purposes
+            } else { 
                 //hyp_spin_lock(&pool->lock);       
 
                 //printk(KERN_EMERG "Cleaning pool of size %d\n", pool->size);
-                // Clean unneccessary pages from the pool
-                while(pool->size != 0 && pool_peek_min(pool)->phy_addr < (resource_size_t) i) // TODO: make sure 'i' is actually physical addres
+                
+                // Clean unneccessary pages from the pool TODO: Make the microvisor not put unneccessary pages in the pool
+                while(pool->size != 0 && pool_peek_min(pool)->phy_addr < (resource_size_t) i)
                     pool_pop_min(pool);
                 
                 //printk(KERN_EMERG "Comparing pool->phy_addr = %p WITH i = %p\n", (void*) pool_peek_min(pool)->phy_addr, (void*)i);
@@ -276,7 +281,8 @@ static void write_range(struct resource * res) {
                 if(pool_peek_min(pool)->phy_addr == (resource_size_t) i)
                 {
                     struct LimePageContext* min = pool_peek_min(pool);
-                    //rintk(KERN_EMERG "writing page FROM pool, phy_addr = %p\n", (void*) min->phy_addr);
+                    
+                    //printk(KERN_EMERG "writing page FROM pool, phy_addr = %p\n", (void*) min->phy_addr);
 
                     s = write_vaddr((void*) min->hyp_vaddr, is); // might not work
                     pool_pop_min(pool);
