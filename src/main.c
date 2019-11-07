@@ -64,7 +64,18 @@ int localhostonly = 0;
 char * digest = 0;
 int compute_digest = 0;
 
+// microvisor stuff
 struct LimePagePool* pool =  NULL;
+
+#define RASPBERRY_PI3_B_PLUS_NUM_PAGES ((1 * 1024 * 1024 * 1024) / PAGE_SIZE) // 1 GB / sizeof page
+#define PAGE_PROCESSED_SIZE (RASPBERRY_PI3_B_PLUS_NUM_PAGES / sizeof(char)) // num_pages / sizeof(char) == number of chars needed to represent every page in memory
+
+unsigned char page_processed[PAGE_PROCESSED_SIZE]; // A giant bitfield of size roughly ~27500 chars ==> num_of_pages bits
+unsigned long lime_current_page_index = 0; // update this every iteration of lime TODO: how to calculate index by physical address? (phy_addr - base_phy_addr) / 4096 ==> should give the page index
+
+#define SET_PAGE_TO_SENT(BitField, page_index) ( BitField[(page_index / 8)] |= (1 << (page_index % 8)) )
+//#define ClearBit(A,k) ( A[(k / 32)] &= ~(1 << (k % 32)) )            
+#define IS_PAGE_SENT(BitField, page_index)     ( BitField[(page_index / 8)] &  (1 << (page_index % 8)) )
 
 extern struct resource iomem_resource;
 
@@ -144,6 +155,8 @@ static int init() {
         compute_digest = ldigest_init();
 
     /* start microvisor(and inderectly initialize the pool) and acquire the pool*/    
+    memset(page_processed, 0x00, PAGE_PROCESSED_SIZE); // zero out the page processed bit field
+
     turn_on_acq();
     pool = (hyplet_get_vm())->limePool;
 
@@ -244,7 +257,7 @@ static void write_range(struct resource * res) {
 
     for (i = res->start; i <= res->end; i += is) {
         msleep(10); // TODO: measure cpu performance boost and times
-        
+
 #ifdef LIME_SUPPORTS_TIMING
         start = ktime_get_real();
 #endif
