@@ -67,16 +67,6 @@ int compute_digest = 0;
 // microvisor stuff
 struct LimePagePool* pool =  NULL;
 
-#define RASPBERRY_PI3_B_PLUS_NUM_PAGES ((1 * 1024 * 1024 * 1024) / PAGE_SIZE) // 1 GB / sizeof page
-#define PAGE_PROCESSED_SIZE (RASPBERRY_PI3_B_PLUS_NUM_PAGES / sizeof(char)) // num_pages / sizeof(char) == number of chars needed to represent every page in memory
-
-unsigned char page_processed[PAGE_PROCESSED_SIZE]; // A giant bitfield of size roughly ~27500 chars ==> num_of_pages bits
-unsigned long lime_current_page_index = 0; // update this every iteration of lime TODO: how to calculate index by physical address? (phy_addr - base_phy_addr) / 4096 ==> should give the page index
-
-#define SET_PAGE_TO_SENT(BitField, page_index) ( BitField[(page_index / 8)] |= (1 << (page_index % 8)) )
-//#define ClearBit(A,k) ( A[(k / 32)] &= ~(1 << (k % 32)) )            
-#define IS_PAGE_SENT(BitField, page_index)     ( BitField[(page_index / 8)] &  (1 << (page_index % 8)) )
-
 extern struct resource iomem_resource;
 
 module_param(path, charp, S_IRUGO);
@@ -156,12 +146,14 @@ static int init() {
 
     /* start microvisor(and inderectly initialize the pool) and acquire the pool*/    
     memset(page_processed, 0x00, PAGE_PROCESSED_SIZE); // zero out the page processed bit field
-
+    
     turn_on_acq();
     pool = (hyplet_get_vm())->limePool;
 
     printk(KERN_DEBUG "lime pool = %p", (void*)pool);
 
+    
+    
     for (p = iomem_resource.child; p ; p = p->sibling) {
 
         if (strcmp(p->name, LIME_RAMSTR))
@@ -256,7 +248,8 @@ static void write_range(struct resource * res) {
     DBG("Writing range %llx - %llx.", res->start, res->end);
 
     for (i = res->start; i <= res->end; i += is) {
-        msleep(10); // TODO: measure cpu performance boost and times
+        
+        msleep(10); // cpu performance of LiME is at 1% - rather than the usual 52%
 
 #ifdef LIME_SUPPORTS_TIMING
         start = ktime_get_real();
@@ -285,9 +278,14 @@ static void write_range(struct resource * res) {
                 //printk(KERN_EMERG "Cleaning pool of size %d\n", pool->size);
                 
                 // Clean unneccessary pages from the pool TODO: Make the microvisor not put unneccessary pages in the pool
-                while(pool->size != 0 && pool_peek_min(pool)->phy_addr < (resource_size_t) i)
-                    pool_pop_min(pool);
-                
+                while(pool->size != 0)// && pool_peek_min(pool)->phy_addr < (resource_size_t) i)
+                {
+
+                    //pool_pop_min(pool);
+                    //
+                    // If current pool object 
+                    //SET_PAGE_TO_SENT(page_processed, )//lime_current_page_index)
+                }
                 //printk(KERN_EMERG "Comparing pool->phy_addr = %p WITH i = %p\n", (void*) pool_peek_min(pool)->phy_addr, (void*)i);
                 
                 // Check if the microvisor has this page already -> if it has it then surely the page is outdated (*v is newer than pool->minimum)
@@ -315,6 +313,8 @@ static void write_range(struct resource * res) {
                 DBG("Short Read %zu instead of %lu.  Null padding.", s, (unsigned long) is);
                 write_padding(is - s);
             }
+        
+            lime_current_page_index++;
         }
 
 #ifdef LIME_SUPPORTS_TIMING
