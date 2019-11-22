@@ -82,5 +82,9 @@ typedef struct {
 } __attribute__ ((__packed__)) lime_mem_range_header;
 
 
+typedef struct{
+    //unsigned long phys_addr;
+    unsigned char memory[PAGE_SIZE];
+} __attribute__ ((__packed__)) hyp_memory_protocol;
 
 #endif //__LIME_H_

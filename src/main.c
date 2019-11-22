@@ -54,6 +54,7 @@ extern int ldigest_final(void);
 static char * format = 0;
 static int mode = 0;
 static int method = 0;
+static unsigned int sleep_time = 0; /* module parameter to control time in ms that lime sleeps every iteration of the tranmistion loop */
 static char * zero_page;
 
 char * path = 0;
@@ -66,6 +67,7 @@ int compute_digest = 0;
 
 // microvisor stuff
 struct LimePagePool* pool =  NULL;
+hyp_memory_protocol page_buffer = {0}; // should zero this struct
 
 extern struct resource iomem_resource;
 
@@ -74,6 +76,7 @@ module_param(dio, int, S_IRUGO);
 module_param(format, charp, S_IRUGO);
 module_param(localhostonly, int, S_IRUGO);
 module_param(digest, charp, S_IRUGO);
+module_param(sleep_time, uint, S_IRUGO); // sleep time for transmition loop, defaults to 0 if not specified
 
 #ifdef LIME_SUPPORTS_TIMING
 long timeout = 1000;
@@ -104,6 +107,7 @@ int init_module (void)
     DBG("  FORMAT: %s", format);
     DBG("  LOCALHOSTONLY: %u", localhostonly);
     DBG("  DIGEST: %s", digest);
+    DBG("  sleep_time: %u", sleep_time);
 
 #ifdef LIME_SUPPORTS_TIMING
     DBG("  TIMEOUT: %lu", timeout);
@@ -239,8 +243,8 @@ static void write_range(struct resource * res) {
     DBG("Writing range %llx - %llx.", res->start, res->end);
 
     for (i = res->start; i <= res->end; i += is) {
-        // TODO: add this back
-       // msleep(10); // cpu performance of LiME is at 1% - rather than the usual 52%
+        /* configure sleep im transmition loop */
+        msleep(sleep_time);
 
 #ifdef LIME_SUPPORTS_TIMING
         start = ktime_get_real();
@@ -263,8 +267,7 @@ static void write_range(struct resource * res) {
                 memcpy(lv, v, is);
                 s = write_vaddr(lv, is);
                 kfree(lv);
-            } else {
-                
+            } else {   
                 /*
                 foreach slot in pool:
                     if slot not int bitfield:
@@ -321,9 +324,34 @@ static void write_range(struct resource * res) {
                 
                 if(!IS_PAGE_SENT(pool->page_processed, bitfield_index))
                 {
-                    /* write phys_addr & content */
+                    int itr_i, itr_j;
+
+                    /* write original address */
                     write_vaddr((void*) &(i), sizeof(i));
-                    s = write_vaddr(v, is);
+
+                    /* copy page content to local buffer */
+                    memcpy(page_buffer.memory, v, is);
+
+                    /* check if the page changed while memcpy was executing */ //then send it from the local buffer 
+                    for (itr_i = 0; itr_i < NUM_POOLS; itr_i++)
+                    {
+                        for (itr_j = 0; itr_j < POOL_SIZE; ++itr_j)
+                            if(pool->pools[itr_i][itr_j].phy_addr == i) // if the pool contains a slot with address of i
+                                break; 
+                        
+                        if(itr_j < POOL_SIZE)
+                            break;
+                    }  
+
+                    /* if we exited the loop because of a break */
+                    if(itr_i < NUM_POOLS && itr_j < POOL_SIZE)
+                    {
+                        /* send contents from the pool */
+                        s = write_vaddr((void*)pool->pools[itr_i][itr_j].hyp_vaddr, is);
+                    }
+                    else
+                        /* send contents from the local buffer */
+                        s = write_vaddr(page_buffer.memory, is);
 
                     /* sent page to sent */                    
                     SET_PAGE_TO_SENT(pool->page_processed, bitfield_index);
