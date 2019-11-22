@@ -145,15 +145,13 @@ static int init() {
         compute_digest = ldigest_init();
 
     /* start microvisor(and inderectly initialize the pool) and acquire the pool*/    
-    //memset(page_processed, 0x00, PAGE_PROCESSED_SIZE); // zero out the page processed bit field
     
     turn_on_acq();
     pool = (hyplet_get_vm())->limePool;
 
     printk(KERN_DEBUG "lime pool = %p", (void*)pool);
 
-    
-    
+        
     for (p = iomem_resource.child; p ; p = p->sibling) {
 
         if (strcmp(p->name, LIME_RAMSTR))
@@ -168,15 +166,8 @@ static int init() {
            break;
         }
 
-        /* Disable preemption */ // TODO: bug check this
-        //int cpu = get_cpu();
-	printk("Erez Lime\n");
-        
-        /* Transmiting the RAM range */
+        /* Transmit the RAM range */
         write_range(p);
-
-        /* Enable preemption */
-        // put_cpu();
 
         p_last = p->end;
     }
@@ -281,73 +272,62 @@ static void write_range(struct resource * res) {
                 if(v not in bitfield):
                     send(v)
                 */ 
-               size_t index;
-               int bitfield_index;
-               for (index = 0; index < POOL_SIZE; index++)
-               {
-                    bitfield_index = phy_addr_to_bitfield_page_index(pool->pool[index].phy_addr);
-                    if(bitfield_index < 0)
-                        printk(KERN_EMERG "bitfield_index < 0 ; phy_addr = %lu\n", pool->pool[index].phy_addr);
-                    
-                    if(pool->pool[index].state == LiME_POOL_PAGE_FREE || IS_PAGE_SENT(pool->page_processed, bitfield_index))
-                        continue;
-                    /* send page.phy_addr and page.content */
-                        write_vaddr((void*) &(pool->pool[index].phy_addr), sizeof(pool->pool[index].phy_addr));
-                    s = write_vaddr((void*) pool->pool[index].hyp_vaddr, is); // TODO: is can probably create bugs, but is not supposed to, check later
-                    
-        // TODO move SET_PAGE... to here and state = free
+                size_t index, pool_index;
+                int bitfield_index;
+                for (pool_index = 0; pool_index < NUM_POOLS; pool_index++)
+                {
+                    for (index = 0; index < POOL_SIZE; index++)
+                    {
+                        bitfield_index = phy_addr_to_bitfield_page_index(pool->pools[pool_index][index].phy_addr);
+                        if(bitfield_index < 0)
+                            printk(KERN_EMERG "bitfield_index < 0 ; phy_addr = %lu\n", pool->pools[pool_index][index].phy_addr);
+                        
+                        if(pool->pools[pool_index][index].state == LiME_POOL_PAGE_FREE || IS_PAGE_SENT(pool->page_processed, bitfield_index))
+                        {
+                            /* important to realease unneeded page slots*/
+                            if(pool->pools[pool_index][index].state == LiME_POOL_PAGE_OCCUPIED && IS_PAGE_SENT(pool->page_processed, bitfield_index))
+                                pool->pools[pool_index][index].state = LiME_POOL_PAGE_FREE;
+                            
+                            continue; // TODO 'optimization' if(free) calc bitfield index and then if(IS_PAGE_SENT) continue; instead of alwways calculating 
+                        }
 
-                    if (s < 0) {
-                        DBG("Error writing page: vaddr %p ret: %zd.  Null padding.", v, s);
-                        write_padding(is);
-                    } 
-                    else if (s != is) {
-                        DBG("Short Read %zu instead of %lu.  Null padding.", s, (unsigned long) is);
-                        write_padding(is - s);
+                        /* send page.phy_addr and page.content */
+                        write_vaddr((void*) &(pool->pools[pool_index][index].phy_addr), sizeof(pool->pools[pool_index][index].phy_addr));
+                        s = write_vaddr((void*) pool->pools[pool_index][index].hyp_vaddr, is); // TODO: is can probably create bugs, but is not supposed to, check later
+
+                        /* free slot for reusage */                    
+                        SET_PAGE_TO_SENT(pool->page_processed, bitfield_index);
+                        pool->pools[pool_index][index].state = LiME_POOL_PAGE_FREE;                    
+
+                        if (s < 0) {
+                            DBG("Error writing page: vaddr %p ret: %zd.  Null padding.", v, s);
+                            write_padding(is);
+                        } 
+                        else if (s != is) {
+                            DBG("Short Read %zu instead of %lu.  Null padding.", s, (unsigned long) is);
+                            write_padding(is - s);
+                        }
+
+                        // TODO: check if we need to add msleep() here
                     }
-
-                    /* free slot for reusage */                    
-                    SET_PAGE_TO_SENT(pool->page_processed, bitfield_index);
-                    pool->pool[index].state = LiME_POOL_PAGE_FREE;
-
-                    // TODO: check if we need to add msleep() here
                }
                
+                // TODO: IMPLEMENT copy to local variable before sending and double check locking - we dont want the page to change while we sent the current one - solve this issue
                 //hyp_spin_lock(&pool->lock);       
-
-                //printk(KERN_EMERG "Cleaning pool of size %d\n", pool->size);
-                
-                // Clean unneccessary pages from the pool TODO: Make the microvisor not put unneccessary pages in the pool
-                // while(pool->size != 0)// && pool_peek_min(pool)->phy_addr < (resource_size_t) i)
-                // {
-
-                    //pool_pop_min(pool);
-                    //
-                    // If current pool object 
-                    //SET_PAGE_TO_SENT(page_processed, )//lime_current_page_index)
-                // }
-                //printk(KERN_EMERG "Comparing pool->phy_addr = %p WITH i = %p\n", (void*) pool_peek_min(pool)->phy_addr, (void*)i);
-                
-                // Check if the microvisor has this page already -> if it has it then surely the page is outdated (*v is newer than pool->minimum)
-                // if(pool_peek_min(pool)->phy_addr == (resource_size_t) i)
-                // {
-                    // struct LimePageContext* min = pool_peek_min(pool);
-                    
-                    //printk(KERN_EMERG "writing page FROM pool, phy_addr = %p\n", (void*) min->phy_addr);
-
-                    // s = write_vaddr((void*) min->hyp_vaddr, is); // might not work
-                    // pool_pop_min(pool);
-                // }
-                // else
 
                 bitfield_index = phy_addr_to_bitfield_page_index(i); // TODO bug check
                 if(bitfield_index < 0)
                     printk(KERN_EMERG "bitfield_index < 0 ; phy_addr = %lu\n", i);
-                    
-                /* write phys_addr & content */
-                write_vaddr((void*) &(i), sizeof(i));
-                s = write_vaddr(v, is);
+                
+                if(!IS_PAGE_SENT(pool->page_processed, bitfield_index))
+                {
+                    /* write phys_addr & content */
+                    write_vaddr((void*) &(i), sizeof(i));
+                    s = write_vaddr(v, is);
 
+                    /* sent page to sent */                    
+                    SET_PAGE_TO_SENT(pool->page_processed, bitfield_index);
+                }
                 //hyp_spin_unlock(&pool->lock);
             }
 
@@ -360,9 +340,6 @@ static void write_range(struct resource * res) {
                 DBG("Short Read %zu instead of %lu.  Null padding.", s, (unsigned long) is);
                 write_padding(is - s);
             }
-        
-            // TODO update the page_index in the pool if needed
-            //lime_current_page_index++;
         }
 
 #ifdef LIME_SUPPORTS_TIMING
